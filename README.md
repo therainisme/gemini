@@ -27,21 +27,34 @@ export AUTH_API_KEY="your-auth-key"
 
 ### Prerequisites
 
-- Go 1.24.3 or later
+- Node.js 18+ or later
 - Google API keys for Gemini API
 
-### Running the Go Server
+### Running the Development Server
 
 ```bash
+# Install dependencies
+pnpm install
+
 # Set environment variables
 export GOOGLE_API_KEYS="your-google-api-keys"
 export AUTH_API_KEY="your-auth-key"
 
-# Run the server
-go run main.go
+# Run the development server
+pnpm dev
 ```
 
-The server will start on `http://localhost:8080`
+The server will start on `http://localhost:3000`
+
+### Building for Production
+
+```bash
+# Build the project
+pnpm build
+
+# Start production server
+pnpm start
+```
 
 ## Deployment
 
@@ -50,17 +63,34 @@ The server will start on `http://localhost:8080`
 This project is configured for easy deployment on Vercel:
 
 1. Connect your repository to Vercel
-2. Set the required environment variables in Vercel dashboard
+2. Set the required environment variables in Vercel dashboard:
+   - `GOOGLE_API_KEYS`
+   - `AUTH_API_KEY`
 3. Deploy automatically
 
-The `vercel.json` configuration routes all requests to the API handler.
+The Next.js API routes handle all proxy requests with automatic edge runtime optimization.
 
 ## API Usage
 
 Send requests to the proxy server with the required authentication header:
 
 ```bash
-curl -X POST "http://localhost:8080/v1beta/models/gemini-2.0-flash:generateContent" \
+curl -X POST "https://your-domain.vercel.app/v1beta/models/gemini-2.0-flash:generateContent" \
+  -H "Content-Type: application/json" \
+  -H "X-Goog-Api-Key: your-auth-key" \
+  -d '{
+    "contents": [{
+      "parts": [{
+        "text": "Hello, Gemini!"
+      }]
+    }]
+  }'
+```
+
+For local development:
+
+```bash
+curl -X POST "http://localhost:3000/v1beta/models/gemini-2.0-flash:generateContent" \
   -H "Content-Type: application/json" \
   -H "X-Goog-Api-Key: your-auth-key" \
   -d '{
