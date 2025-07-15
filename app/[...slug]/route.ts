@@ -50,7 +50,7 @@ function validateAPIKey(request: NextRequest): boolean {
   if (!apiKey) {
     const authHeader = request.headers.get("Authorization");
     if (authHeader && authHeader.startsWith("Bearer ")) {
-      apiKey = authHeader.substring(7); 
+      apiKey = authHeader.substring(7);
     }
   }
 
@@ -91,6 +91,7 @@ async function handleRequest(request: NextRequest): Promise<NextResponse> {
     let randomAPIKey: string;
     try {
       randomAPIKey = getRandomAPIKey();
+      console.log(`Using Google API Key: ${randomAPIKey.substring(0, 10)}...`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.log(`Failed to get API key: ${errorMessage}`);
@@ -107,14 +108,27 @@ async function handleRequest(request: NextRequest): Promise<NextResponse> {
     // Use the full pathname as the API path (since all routes come here now)
     const apiPath = url.pathname || '/';
     const targetURL = `https://generativelanguage.googleapis.com${apiPath}${url.search}`;
+    console.log(`Target URL: ${targetURL}`);
 
     // Create new request headers
     const headers = new Headers(request.headers);
     headers.set("Host", "generativelanguage.googleapis.com");
 
-    // Set both authentication headers for maximum compatibility
-    headers.set("X-Goog-Api-Key", randomAPIKey);
-    headers.set("Authorization", `Bearer ${randomAPIKey}`);
+    // Determine authentication method based on API path
+    const isOpenAICompatible = apiPath.includes('/openai/');
+
+    if (isOpenAICompatible) {
+      // For OpenAI-compatible endpoints, use Authorization header only
+      headers.set("Authorization", `Bearer ${randomAPIKey}`);
+      headers.delete("X-Goog-Api-Key"); // Remove if exists
+    } else {
+      // For native Gemini endpoints, use X-Goog-Api-Key header only
+      headers.set("X-Goog-Api-Key", randomAPIKey);
+      headers.delete("Authorization"); // Remove if exists
+    }
+
+    // Log outgoing headers
+    console.log(`Outgoing Headers:`, Object.fromEntries(headers.entries()));
 
     // Create proxy request
     const proxyRequest = new Request(targetURL, {
