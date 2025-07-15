@@ -41,9 +41,19 @@ function getRandomAPIKey(): string {
   return selectedKey;
 }
 
-// Validate API key by checking if the X-Goog-Api-Key header contains the expected value
+// Validate API key by checking both X-Goog-Api-Key and Authorization headers
 function validateAPIKey(request: NextRequest): boolean {
-  const apiKey = request.headers.get("X-Goog-Api-Key");
+  // First try X-Goog-Api-Key header (for direct Google API calls)
+  let apiKey = request.headers.get("X-Goog-Api-Key");
+
+  // If not found, try Authorization header (for OpenAI-compatible calls)
+  if (!apiKey) {
+    const authHeader = request.headers.get("Authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      apiKey = authHeader.substring(7); 
+    }
+  }
+
   console.log(`API Key from header: ${apiKey}`);
 
   // Get expected API key from environment variable
@@ -100,8 +110,11 @@ async function handleRequest(request: NextRequest): Promise<NextResponse> {
 
     // Create new request headers
     const headers = new Headers(request.headers);
-    headers.set("X-Goog-Api-Key", randomAPIKey);
     headers.set("Host", "generativelanguage.googleapis.com");
+
+    // Set both authentication headers for maximum compatibility
+    headers.set("X-Goog-Api-Key", randomAPIKey);
+    headers.set("Authorization", `Bearer ${randomAPIKey}`);
 
     // Create proxy request
     const proxyRequest = new Request(targetURL, {
