@@ -114,6 +114,9 @@ async function handleRequest(request: NextRequest): Promise<NextResponse> {
     const headers = new Headers(request.headers);
     headers.set("Host", "generativelanguage.googleapis.com");
 
+    // Remove accept-encoding to prevent gzip compression issues
+    headers.delete("accept-encoding");
+
     // Determine authentication method based on API path
     const isOpenAICompatible = apiPath.includes('/openai/');
 
@@ -151,6 +154,9 @@ async function handleRequest(request: NextRequest): Promise<NextResponse> {
       responseHeaders.set("Cache-Control", "no-cache");
       responseHeaders.set("Connection", "keep-alive");
     }
+
+    // Remove content-encoding to prevent client-side decompression issues
+    responseHeaders.delete("content-encoding");
 
     // Return proxy response
     return new NextResponse(response.body, {
