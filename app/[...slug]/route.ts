@@ -1,9 +1,12 @@
 import { get } from '@vercel/edge-config';
 import { NextRequest, NextResponse } from 'next/server';
+import { Redis } from '@upstash/redis';
 
 export const config = {
   runtime: "edge",
 };
+
+const redis = Redis.fromEnv();
 
 // Log request information for debugging
 function logRequest(request: NextRequest): void {
@@ -21,24 +24,30 @@ async function getRandomAPIKey(): Promise<string> {
     throw new Error("GOOGLE_API_KEYS not found in Edge Config");
   }
 
-  const apiKeys = apiKeysEnv.split(",");
+  const apiKeys = apiKeysEnv.split(",").map(key => key.trim()).filter(key => key !== "");
   if (apiKeys.length === 0) {
-    console.log("Error: No API keys found in Edge Config");
-    throw new Error("No API keys found in Edge Config");
+    console.log("Error: No API keys found in environment variable");
+    throw new Error("No API keys found in environment variable");
   }
 
-  // Clean up keys (remove spaces)
-  const validKeys = apiKeys
-    .map((key: string) => key.trim())
-    .filter((key: string) => key !== "");
+  // Filter out disabled keys
+  const availableKeys = [];
+  for (const key of apiKeys) {
+    const isDisabled = await redis.get(`disabled:${key}`);
+    if (!isDisabled) {
+      availableKeys.push(key);
+    } else {
+      console.log(`API Key ${key.substring(0, 10)}... is temporarily disabled.`);
+    }
+  }
 
-  if (validKeys.length === 0) {
-    console.log("Error: No valid API keys found after cleanup");
-    throw new Error("No valid API keys found");
+  if (availableKeys.length === 0) {
+    console.log("Error: All API keys are temporarily disabled");
+    throw new Error("All API keys are temporarily disabled");
   }
 
   // Select random API key
-  const selectedKey = validKeys[Math.floor(Math.random() * validKeys.length)];
+  const selectedKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
   return selectedKey;
 }
 
@@ -145,6 +154,38 @@ async function handleRequest(request: NextRequest): Promise<NextResponse> {
 
     // Send request to target server
     const response = await fetch(proxyRequest);
+
+    // Log Google API Key status and update stats in Upstash Redis
+    const pipeline = redis.pipeline();
+    const statsKey = `stats:${randomAPIKey}`;
+
+    if (response.status === 200) {
+      pipeline.hincrby(statsKey, 'success', 1);
+    } else if (response.status === 429) {
+      pipeline.hincrby(statsKey, 'failed', 1);
+      console.log(
+        `API Key ${randomAPIKey.substring(
+          0,
+          10,
+        )}... received status 429 (Rate Limit Exceeded)`,
+      );
+    }
+    await pipeline.exec();
+
+    // Disable key if failure rate is high
+    const stats: { success: number; failed: number } | null = await redis.hgetall(statsKey);
+    if (stats) {
+        const totalRequests = (stats.success || 0) + (stats.failed || 0);
+        if (totalRequests > 20 && ((stats.failed || 0) / totalRequests) > 0.5) {
+            await redis.set(`disabled:${randomAPIKey}`, "true", { ex: 3600 }); // Disable for 1 hour
+            console.log(
+                `API Key ${randomAPIKey.substring(
+                0,
+                10,
+                )}... has been disabled for 1 hour due to high failure rate.`,
+            );
+        }
+    }
 
     // Create new response headers
     const responseHeaders = new Headers(response.headers);
