@@ -1,3 +1,4 @@
+import { get } from '@vercel/edge-config';
 import { NextRequest, NextResponse } from 'next/server';
 
 export const config = {
@@ -12,18 +13,18 @@ function logRequest(request: NextRequest): void {
   console.log("---");
 }
 
-// Get random API key from environment variable and return a random one
-function getRandomAPIKey(): string {
-  const apiKeysEnv = process.env.GOOGLE_API_KEYS;
+// Get random API key from Vercel Edge Config and return a random one
+async function getRandomAPIKey(): Promise<string> {
+  const apiKeysEnv = await get<string>("GOOGLE_API_KEYS");
   if (!apiKeysEnv) {
-    console.log("Error: GOOGLE_API_KEYS environment variable not set");
-    throw new Error("GOOGLE_API_KEYS environment variable not set");
+    console.log("Error: GOOGLE_API_KEYS not found in Edge Config");
+    throw new Error("GOOGLE_API_KEYS not found in Edge Config");
   }
 
   const apiKeys = apiKeysEnv.split(",");
   if (apiKeys.length === 0) {
-    console.log("Error: No API keys found in environment variable");
-    throw new Error("No API keys found in environment variable");
+    console.log("Error: No API keys found in Edge Config");
+    throw new Error("No API keys found in Edge Config");
   }
 
   // Clean up keys (remove spaces)
@@ -90,7 +91,7 @@ async function handleRequest(request: NextRequest): Promise<NextResponse> {
     // Replace API Key with a random one from environment
     let randomAPIKey: string;
     try {
-      randomAPIKey = getRandomAPIKey();
+      randomAPIKey = await getRandomAPIKey();
       console.log(`Using Google API Key: ${randomAPIKey.substring(0, 10)}...`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
