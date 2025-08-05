@@ -48,7 +48,7 @@ function validateAPIKey(request: NextRequest): boolean {
 
   // If not found, try Authorization header (for OpenAI-compatible calls)
   if (!apiKey) {
-    const authHeader = request.headers.get("Authorization");
+    const authHeader = request.headers.get("Authorization") || request.headers.get("authorization");
     if (authHeader && authHeader.startsWith("Bearer ")) {
       apiKey = authHeader.substring(7);
     }
